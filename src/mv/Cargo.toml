@@ -1,0 +1,20 @@
+[package]
+name = "mv"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_mv"
+path = "mv.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[dev-dependencies]
+time = "*"
+
+[[bin]]
+name = "mv"
+path = "main.rs"

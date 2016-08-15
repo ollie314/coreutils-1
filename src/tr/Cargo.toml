@@ -1,0 +1,19 @@
+[package]
+name = "tr"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_tr"
+path = "tr.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+bit-set = "*"
+vec_map = "0.6.0"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "tr"
+path = "main.rs"

@@ -1,0 +1,18 @@
+[package]
+name = "chmod"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_chmod"
+path = "chmod.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+walker = "*"
+
+[[bin]]
+name = "chmod"
+path = "main.rs"

@@ -1,297 +1,312 @@
 # Config options
-ENABLE_LTO    ?= n
-ENABLE_STRIP  ?= n
+PROFILE         ?= debug
+MULTICALL       ?= n
+INSTALL         ?= install
+ifneq (,$(filter install, $(MAKECMDGOALS)))
+override PROFILE:=release
+endif
+
+PROFILE_CMD :=
+ifeq ($(PROFILE),release)
+	PROFILE_CMD = --release
+endif
+
+RM := rm -rf
 
 # Binaries
-RUSTC         ?= rustc
-RM            := rm
-
-# Flags
-RUSTCFLAGS    := --opt-level=3
-RMFLAGS       :=
-
-# Handle config setup
-ifeq ($(ENABLE_LTO),y)
-RUSTCBINFLAGS := $(RUSTCFLAGS) -Z lto
-else
-RUSTCBINFLAGS := $(RUSTCFLAGS)
-endif
-
-ifneq ($(ENABLE_STRIP),y)
-ENABLE_STRIP :=
-endif
+CARGO  ?= cargo
+CARGOFLAGS ?=
 
 # Install directories
-PREFIX   ?= /usr/local
-BINDIR   ?= /bin
+PREFIX ?= /usr/local
+DESTDIR ?=
+BINDIR ?= /bin
+LIBDIR ?= /lib
+
+INSTALLDIR_BIN=$(DESTDIR)$(PREFIX)$(BINDIR)
+INSTALLDIR_LIB=$(DESTDIR)$(PREFIX)$(LIBDIR)
+
+#prefix to apply to uutils binary and all tool binaries
+PROG_PREFIX ?=
 
 # This won't support any directory with spaces in its name, but you can just
 # make a symlink without spaces that points to the directory.
-BASEDIR  ?= $(shell pwd)
-SRCDIR   := $(BASEDIR)/src
-BUILDDIR := $(BASEDIR)/build
-TESTDIR  := $(BASEDIR)/test
-TEMPDIR  := $(BASEDIR)/tmp
+BASEDIR       ?= $(shell pwd)
+BUILDDIR      := $(BASEDIR)/target/${PROFILE}
+PKG_BUILDDIR  := $(BUILDDIR)/deps
+
+BUSYBOX_ROOT := $(BASEDIR)/tmp
+BUSYBOX_VER  := 1.24.1
+BUSYBOX_SRC  := $(BUSYBOX_ROOT)/busybox-$(BUSYBOX_VER)
 
 # Possible programs
 PROGS       := \
+  base32 \
   base64 \
   basename \
   cat \
-  chmod \
   cksum \
   comm \
   cp \
   cut \
+  dircolors \
   dirname \
   echo \
   env \
-  du \
   expand \
+  expr \
   factor \
   false \
   fmt \
   fold \
-  link \
   hashsum \
+  head \
+  link \
+  ln \
+  ls \
   mkdir \
-  mv \
+  mktemp \
   nl \
   nproc \
+  od \
   paste \
   printenv \
+  printf \
+  ptx \
   pwd \
+  readlink \
   realpath \
   relpath \
   rm \
   rmdir \
-  sleep \
-  split \
   seq \
+  shred \
   shuf \
+  sleep \
   sort \
+  split \
   sum \
   sync \
   tac \
+  tail \
   tee \
   test \
-  touch \
   tr \
   true \
   truncate \
   tsort \
   unexpand \
-  unlink \
   uniq \
   wc \
-  yes \
-  head \
-  tail \
-  whoami
+  whoami \
+  yes
 
 UNIX_PROGS := \
+  arch \
+  chmod \
+  chown \
   chroot \
+  du \
   groups \
   hostid \
   hostname \
   id \
+  install \
   kill \
   logname \
   mkfifo \
+  mknod \
+  mv \
+  nice \
   nohup \
+  pathchk \
+  pinky \
+  stat \
+  stdbuf \
   timeout \
+  touch \
   tty \
   uname \
+  unlink \
   uptime \
-  users
+  users \
+  who
 
 ifneq ($(OS),Windows_NT)
 	PROGS    := $(PROGS) $(UNIX_PROGS)
 endif
 
-ALIASES := \
-	hashsum:md5sum \
-	hashsum:sha1sum \
-	hashsum:sha224sum \
-	hashsum:sha256sum \
-	hashsum:sha384sum \
-	hashsum:sha512sum
-
-BUILD       ?= $(PROGS)
-
-# Output names
-EXES        := \
-  $(sort $(filter $(BUILD),$(filter-out $(DONT_BUILD),$(PROGS))))
-
-CRATE_RLIBS :=
-
-INSTALL     ?= $(EXES)
-
-INSTALLEES  := \
-  $(filter $(INSTALL),$(filter-out $(DONT_INSTALL),$(EXES) uutils))
+UTILS ?= $(PROGS)
 
 # Programs with usable tests
 TEST_PROGS  := \
-  cat \
-  cp \
-  mkdir \
-  mv \
-  nl \
-  seq \
-  sort \
-  test \
-  tr \
-  truncate \
-  unexpand
-
-TEST        ?= $(TEST_PROGS)
+	base32 \
+	base64 \
+	basename \
+	cat \
+	chmod \
+	chown \
+	cksum \
+	comm \
+	cp \
+	cut \
+	dircolors \
+	dirname \
+	echo \
+	env \
+	expr \
+	factor \
+	false \
+	fold \
+	hashsum \
+	head \
+	install \
+	link \
+	ln \
+	ls \
+	mkdir \
+	mktemp \
+	mv \
+	nl \
+	od \
+	paste \
+	pathchk \
+	pinky \
+	printf \
+	ptx \
+	pwd \
+	readlink \
+	realpath \
+	rm \
+	rmdir \
+	seq \
+	sort \
+	split \
+	stat \
+	stdbuf \
+	sum \
+	tac \
+	tail \
+	test \
+	touch \
+	tr \
+	true \
+	truncate \
+	tsort \
+	unexpand \
+	uniq \
+	unlink \
+	wc \
+	who
 
 TESTS       := \
-  $(filter $(TEST),$(filter-out $(DONT_TEST),$(filter $(BUILD),$(filter-out $(DONT_BUILD),$(TEST_PROGS)))))
+	$(sort $(filter $(UTILS),$(filter-out $(SKIP_UTILS),$(TEST_PROGS))))
 
-# Setup for building crates
-define BUILD_SETUP
-X := $(shell $(RUSTC) --print-file-name --crate-type rlib $(SRCDIR)/$(1)/$(1).rs)
-$(1)_RLIB := $$(X)
-CRATE_RLIBS += $$(X)
-endef
-$(foreach crate,$(EXES),$(eval $(call BUILD_SETUP,$(crate))))
-
-# Utils stuff
-EXES_PATHS  := $(addprefix $(BUILDDIR)/,$(EXES))
-RLIB_PATHS  := $(addprefix $(BUILDDIR)/,$(CRATE_RLIBS))
-command     = sh -c '$(1)'
-
-# Main exe build rule
-define EXE_BUILD
-$(BUILDDIR)/gen/$(1).rs: $(BUILDDIR)/mkmain
-	$(BUILDDIR)/mkmain $(1) $$@
-
-$(BUILDDIR)/$(1): $(BUILDDIR)/gen/$(1).rs $(BUILDDIR)/$($(1)_RLIB) | $(BUILDDIR) deps
-	$(RUSTC) $(RUSTCBINFLAGS) -L $(BUILDDIR)/ -o $$@ $$<
-	$(if $(ENABLE_STRIP),strip $$@,)
-endef
-
-define CRATE_BUILD
--include $(BUILDDIR)/$(1).d
-
-$(BUILDDIR)/$($(1)_RLIB): $(SRCDIR)/$(1)/$(1).rs | $(BUILDDIR) deps
-	$(RUSTC) $(RUSTCFLAGS) -L $(BUILDDIR)/ --crate-type rlib --dep-info $(BUILDDIR)/$(1).d $$< --out-dir $(BUILDDIR)
-endef
-
-# Aliases build rule
-ALIAS_SOURCE = $(firstword $(subst :, ,$(1)))
-ALIAS_TARGET = $(word 2,$(subst :, ,$(1)))
-define MAKE_ALIAS
-
-ifneq ($(ALIAS_TARGET,$(1)),)
-all: $(BUILDDIR)/$(call ALIAS_TARGET,$(1))
-$(BUILDDIR)/$(call ALIAS_TARGET,$(1)): $(BUILDDIR)/$(call ALIAS_SOURCE,$(1))
-	$(call command,install $$@ $$<)
+TEST_NO_FAIL_FAST :=
+TEST_SPEC_FEATURE :=
+ifneq ($(SPEC),)
+TEST_NO_FAIL_FAST :=--no-fail-fast
+TEST_SPEC_FEATURE := test_unimplemented
 endif
 
+define BUILD_EXE
+build_exe_$(1):
+	${CARGO} build ${CARGOFLAGS} ${PROFILE_CMD} -p $(1)
 endef
 
-# Test exe built rules
-define TEST_BUILD
-test_$(1): $(TEMPDIR)/$(1)/$(1)_test $(BUILDDIR)/$(1)
-	$(call command,cp $(BUILDDIR)/$(1) $(TEMPDIR)/$(1) && cd $(TEMPDIR)/$(1) && $$<)
-
-$(TEMPDIR)/$(1)/$(1)_test: $(TESTDIR)/$(1).rs | $(TEMPDIR)/$(1)
-	$(call command,$(RUSTC) $(RUSTCFLAGS) --test -o $$@ $$<)
-
-$(TEMPDIR)/$(1): | $(TEMPDIR)
-	$(call command,cp -r $(TESTDIR)/fixtures/$(1) $$@ || mkdir $$@)
+define TEST_BUSYBOX
+test_busybox_$(1):
+	(cd $(BUSYBOX_SRC)/testsuite && bindir=$(BUILDDIR) ./runtest $(RUNTEST_ARGS) $(1) )
 endef
 
-# Main rules
-all: $(EXES_PATHS) $(BUILDDIR)/uutils
+# Output names
+EXES        := \
+  $(sort $(filter $(UTILS),$(filter-out $(SKIP_UTILS),$(PROGS))))
 
-# Creating necessary rules for each targets
-$(foreach crate,$(EXES),$(eval $(call CRATE_BUILD,$(crate))))
-$(foreach exe,$(EXES),$(eval $(call EXE_BUILD,$(exe))))
-$(foreach alias,$(ALIASES),$(eval $(call MAKE_ALIAS,$(alias))))
-$(foreach test,$(TESTS),$(eval $(call TEST_BUILD,$(test))))
+INSTALLEES  := ${EXES} uutils
 
--include $(BUILDDIR)/uutils.d
-$(BUILDDIR)/uutils: $(SRCDIR)/uutils/uutils.rs $(BUILDDIR)/mkuutils $(RLIB_PATHS)
-	$(BUILDDIR)/mkuutils $(BUILDDIR)/gen/uutils.rs $(EXES)
-	$(RUSTC) $(RUSTCBINFLAGS) -L $(BUILDDIR)/ --dep-info $@.d $(BUILDDIR)/gen/uutils.rs -o $@
-	$(if $(ENABLE_STRIP),strip $@)
+# Shared library extension
+SYSTEM := $(shell uname)
+DYLIB_EXT :=
+ifeq ($(SYSTEM),Linux)
+	DYLIB_EXT    := so
+	DYLIB_FLAGS  := -shared
+endif
+ifeq ($(SYSTEM),Darwin)
+	DYLIB_EXT    := dylib
+	DYLIB_FLAGS  := -dynamiclib -undefined dynamic_lookup
+endif
 
-# Dependencies
--include $(BUILDDIR)/rust-crypto.d
-$(BUILDDIR)/.rust-crypto: | $(BUILDDIR)
-	$(RUSTC) $(RUSTCFLAGS) --crate-type rlib --dep-info $(BUILDDIR)/rust-crypto.d $(BASEDIR)/deps/rust-crypto/src/rust-crypto/lib.rs --out-dir $(BUILDDIR)/
-	@touch $@
+# Libaries to install
+LIBS :=
+ifneq (,$(findstring stdbuf, $(INSTALLEES)))
+LIBS += libstdbuf.$(DYLIB_EXT)
+endif
 
-$(BUILDDIR)/mkmain: mkmain.rs | $(BUILDDIR)
-	$(RUSTC) $(RUSTCFLAGS) -L $(BUILDDIR) $< -o $@
+all: build
 
-$(BUILDDIR)/mkuutils: mkuutils.rs | $(BUILDDIR)
-	$(RUSTC) $(RUSTCFLAGS) -L $(BUILDDIR) $< -o $@
+do_install = $(INSTALL) ${1}
+use_default := 1
 
-$(SRCDIR)/cksum/crc_table.rs: $(SRCDIR)/cksum/gen_table.rs
-	cd $(SRCDIR)/cksum && $(RUSTC) $(RUSTCFLAGS) gen_table.rs && ./gen_table && $(RM) gen_table
+$(foreach util,$(EXES),$(eval $(call BUILD_EXE,$(util))))
 
-deps: $(BUILDDIR)/.rust-crypto $(SRCDIR)/cksum/crc_table.rs
+build-pkgs: $(addprefix build_exe_,$(EXES))
 
-crates:
-	echo $(EXES)
+build-uutils:
+	${CARGO} build ${CARGOFLAGS} --features "${EXES}" ${PROFILE_CMD} --no-default-features
 
-test: $(TEMPDIR) $(addprefix test_,$(TESTS))
-	$(RM) -rf $(TEMPDIR)
+build: build-uutils build-pkgs
 
-clean:
-	$(RM) -rf $(BUILDDIR) $(TEMPDIR)
+$(foreach test,$(filter-out $(SKIP_UTILS),$(PROGS)),$(eval $(call TEST_BUSYBOX,$(test))))
 
-$(BUILDDIR):
-	git submodule update --init
-	mkdir -p $(BUILDDIR)/gen
+test:
+	${CARGO} test ${CARGOFLAGS} --features "$(TESTS) $(TEST_SPEC_FEATURE)" --no-default-features $(TEST_NO_FAIL_FAST)
 
-$(TEMPDIR):
-	mkdir $(TEMPDIR)
-
-install: $(addprefix $(BUILDDIR)/,$(INSTALLEES))
-	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
-	for prog in $(INSTALLEES); do \
-		install $(BUILDDIR)/$$prog $(DESTDIR)$(PREFIX)$(BINDIR)/$(PROG_PREFIX)$$prog; \
-	done
-
-# TODO: figure out if there is way for prefixes to work with the symlinks
-install-multicall: $(BUILDDIR)/uutils
-	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
-	install $(BUILDDIR)/uutils $(DESTDIR)$(PREFIX)$(BINDIR)/$(PROG_PREFIX)uutils
-	cd $(DESTDIR)$(PREFIX)$(BINDIR)
-	for prog in $(INSTALLEES); do \
-		ln -s $(PROG_PREFIX)uutils $$prog; \
-	done
-
-uninstall:
-	rm -f $(addprefix $(DESTDIR)$(PREFIX)$(BINDIR)/$(PROG_PREFIX),$(PROGS))
-
-uninstall-multicall:
-	rm -f $(addprefix $(DESTDIR)$(PREFIX)$(BINDIR)/,$(PROGS) $(PROG_PREFIX)uutils)
-
-# Test under the busybox testsuite
-$(BUILDDIR)/busybox: $(BUILDDIR)/uutils
-	rm -f $(BUILDDIR)/busybox
-	ln -s $(BUILDDIR)/uutils $(BUILDDIR)/busybox
+busybox-src:
+	if [ ! -e $(BUSYBOX_SRC) ]; then \
+	mkdir -p $(BUSYBOX_ROOT); \
+	wget https://busybox.net/downloads/busybox-$(BUSYBOX_VER).tar.bz2 -P $(BUSYBOX_ROOT); \
+	tar -C $(BUSYBOX_ROOT) -xf $(BUSYBOX_ROOT)/busybox-$(BUSYBOX_VER).tar.bz2; \
+	fi; \
 
 # This is a busybox-specific config file their test suite wants to parse.
-$(BUILDDIR)/.config: $(BASEDIR)/.busybox-config $(BUILDDIR)/uutils
+$(BUILDDIR)/.config: $(BASEDIR)/.busybox-config
 	cp $< $@
 
-ifeq ($(BUSYBOX_SRC),)
+# Test under the busybox testsuite
+$(BUILDDIR)/busybox: busybox-src build-uutils $(BUILDDIR)/.config
+	cp $(BUILDDIR)/uutils $(BUILDDIR)/busybox; \
+	chmod +x $@;
+
+ifeq ($(EXES),)
 busytest:
-	@echo
-	@echo "To run \`busytest\` set BUSYBOX_SRC to the directory of the compiled busybox source code."
-	@echo "Optionally set RUNTEST_ARGS to arguments to pass to the busybox \`runtest\` program."
-	@echo
-	@false
 else
-busytest: $(BUILDDIR)/busybox $(BUILDDIR)/.config
-	(cd $(BUSYBOX_SRC)/testsuite && bindir=$(BUILDDIR) ./runtest $(RUNTEST_ARGS))
+busytest: $(BUILDDIR)/busybox $(addprefix test_busybox_,$(filter-out $(SKIP_UTILS),$(EXES)))
 endif
 
-.PHONY: all deps test clean busytest install uninstall
+clean:
+	$(RM) $(BUILDDIR)
+
+distclean: clean
+	$(CARGO) clean $(CARGOFLAGS) && $(CARGO) update $(CARGOFLAGS)
+
+install: build
+	mkdir -p $(INSTALLDIR_BIN)
+ifeq (${MULTICALL}, y)
+	$(INSTALL) $(BUILDDIR)/uutils $(INSTALLDIR_BIN)/$(PROG_PREFIX)uutils
+	$(foreach prog, $(INSTALLEES), cd $(INSTALLDIR_BIN) && ln -fs $(PROG_PREFIX)uutils $(PROG_PREFIX)$(prog);)
+else
+	$(foreach prog, $(INSTALLEES), \
+		$(INSTALL) $(PKG_BUILDDIR)/$(prog) $(INSTALLDIR_BIN)/$(PROG_PREFIX)$(prog);)
+endif
+	mkdir -p $(INSTALLDIR_LIB)
+	$(foreach lib, $(LIBS), $(INSTALL) $(BUILDDIR)/$(lib) $(INSTALLDIR_LIB)/$(lib);)
+
+uninstall:
+ifeq (${MULTICALL}, y)
+	rm -f $(addprefix $(INSTALLDIR_BIN)/,$(PROG_PREFIX)uutils)
+endif
+	rm -f $(addprefix $(INSTALLDIR_BIN)/$(PROG_PREFIX),$(PROGS))
+	rm -f $(addprefix $(INSTALLDIR_LIB)/,$(LIBS))
+
+.PHONY: all build test distclean clean busytest install uninstall

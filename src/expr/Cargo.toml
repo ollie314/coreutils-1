@@ -1,0 +1,17 @@
+[package]
+name = "expr"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_expr"
+path = "expr.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "expr"
+path = "main.rs"

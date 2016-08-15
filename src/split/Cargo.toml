@@ -1,0 +1,17 @@
+[package]
+name = "split"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_split"
+path = "split.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "split"
+path = "main.rs"

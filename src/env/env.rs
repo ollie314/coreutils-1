@@ -1,4 +1,4 @@
-#![crate_name = "env"]
+#![crate_name = "uu_env"]
 
 /*
  * This file is part of the uutils coreutils package.
@@ -13,6 +13,16 @@
 
 #![allow(non_camel_case_types)]
 
+#[macro_use]
+extern crate uucore;
+
+use std::env;
+use std::io::Write;
+use std::process::Command;
+
+static NAME: &'static str = "env";
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 struct options {
     ignore_env: bool,
     null: bool,
@@ -21,8 +31,8 @@ struct options {
     program: Vec<String>
 }
 
-fn usage(prog: &str) {
-    println!("Usage: {:s} [OPTION]... [-] [NAME=VALUE]... [COMMAND [ARG]...]", prog);
+fn usage() {
+    println!("Usage: {} [OPTION]... [-] [NAME=VALUE]... [COMMAND [ARG]...]", NAME);
     println!("Set each NAME to VALUE in the environment and run COMMAND\n");
     println!("Possible options are:");
     println!("  -i --ignore-environment\t start with an empty environment");
@@ -34,34 +44,26 @@ fn usage(prog: &str) {
 }
 
 fn version() {
-    println!("env 1.0.0");
+    println!("{} {}", NAME, VERSION);
 }
 
 // print name=value env pairs on screen
 // if null is true, separate pairs with a \0, \n otherwise
 fn print_env(null: bool) {
-    let env = std::os::env();
-
-    for &(ref n, ref v) in env.iter() {
-        print!("{:s}={:s}{:c}",
-            n.as_slice(),
-            v.as_slice(),
-            if null { '\0' } else { '\n' }
-        );
+    for (n, v) in env::vars() {
+        print!("{}={}{}", n, v, if null { '\0' } else { '\n' });
     }
 }
 
-pub fn uumain(args: Vec<String>) -> int {
-    let prog = args[0].as_slice();
-
+pub fn uumain(args: Vec<String>) -> i32 {
     // to handle arguments the same way than GNU env, we can't use getopts
-    let mut opts = box options {
+    let mut opts = Box::new(options {
         ignore_env: false,
         null: false,
         unsets: vec!(),
         sets: vec!(),
         program: vec!()
-    };
+    });
 
     let mut wait_cmd = false;
     let mut iter = args.iter();
@@ -76,23 +78,23 @@ pub fn uumain(args: Vec<String>) -> int {
 
         if wait_cmd {
             // we still accept NAME=VAL here but not other options
-            let mut sp = opt.as_slice().splitn(1, '=');
+            let mut sp = opt.splitn(2, '=');
             let name = sp.next();
             let value = sp.next();
 
             match (name, value) {
                 (Some(n), Some(v)) => {
-                    opts.sets.push((n.into_string(), v.into_string()));
+                    opts.sets.push((n.to_owned(), v.to_owned()));
                 }
                 _ => {
                     // read the program now
-                    opts.program.push(opt.to_string());
+                    opts.program.push(opt.to_owned());
                     break;
                 }
             }
-        } else if opt.as_slice().starts_with("--") {
-            match opt.as_slice() {
-                "--help" => { usage(prog); return 0; }
+        } else if opt.starts_with("--") {
+            match opt.as_ref() {
+                "--help" => { usage(); return 0; }
                 "--version" => { version(); return 0; }
 
                 "--ignore-environment" => opts.ignore_env = true,
@@ -101,32 +103,32 @@ pub fn uumain(args: Vec<String>) -> int {
                     let var = iter.next();
 
                     match var {
-                        None => println!("{:s}: this option requires an argument: {:s}", prog, opt.as_slice()),
-                        Some(s) => opts.unsets.push(s.to_string())
+                        None => println!("{}: this option requires an argument: {}", NAME, opt),
+                        Some(s) => opts.unsets.push(s.to_owned())
                     }
                 }
 
                 _ => {
-                    println!("{:s}: invalid option \"{:s}\"", prog, *opt);
-                    println!("Type \"{:s} --help\" for detailed informations", prog);
+                    println!("{}: invalid option \"{}\"", NAME, *opt);
+                    println!("Type \"{} --help\" for detailed informations", NAME);
                     return 1;
                 }
             }
-        } else if opt.as_slice().starts_with("-") {
-            if opt.len() == 0 {
+        } else if opt.starts_with("-") {
+            if opt.len() == 1 {
                 // implies -i and stop parsing opts
                 wait_cmd = true;
                 opts.ignore_env = true;
                 continue;
             }
 
-            let mut chars = opt.as_slice().chars();
+            let mut chars = opt.chars();
             chars.next();
 
             for c in chars {
                 // short versions of options
                 match c {
-                    'h' => { usage(prog); return 0; }
+                    'h' => { usage(); return 0; }
                     'V' => { version(); return 0; }
                     'i' => opts.ignore_env = true,
                     '0' => opts.null = true,
@@ -134,32 +136,32 @@ pub fn uumain(args: Vec<String>) -> int {
                         let var = iter.next();
 
                         match var {
-                            None => println!("{:s}: this option requires an argument: {:s}", prog, opt.as_slice()),
-                            Some(s) => opts.unsets.push(s.to_string())
+                            None => println!("{}: this option requires an argument: {}", NAME, opt),
+                            Some(s) => opts.unsets.push(s.to_owned())
                         }
                     }
                     _ => {
-                        println!("{:s}: illegal option -- {:c}", prog, c);
-                        println!("Type \"{:s} --help\" for detailed informations", prog);
+                        println!("{}: illegal option -- {}", NAME, c);
+                        println!("Type \"{} --help\" for detailed informations", NAME);
                         return 1;
                     }
                 }
             }
         } else {
             // is it a NAME=VALUE like opt ?
-            let mut sp = opt.as_slice().splitn(1, '=');
+            let mut sp = opt.splitn(2, "=");
             let name = sp.next();
             let value = sp.next();
 
             match (name, value) {
                 (Some(n), Some(v)) => {
                     // yes
-                    opts.sets.push((n.into_string(), v.into_string()));
+                    opts.sets.push((n.to_owned(), v.to_owned()));
                     wait_cmd = true;
                 }
                 // no, its a program-like opt
                 _ => {
-                    opts.program.push(opt.to_string());
+                    opts.program.push(opt.clone());
                     break;
                 }
             }
@@ -170,40 +172,34 @@ pub fn uumain(args: Vec<String>) -> int {
 
     // read program arguments
     for opt in iter {
-        opts.program.push(opt.to_string());
+        opts.program.push(opt.clone());
     }
 
-    let env = std::os::env();
-
     if opts.ignore_env {
-        for &(ref name, _) in env.iter() {
-            std::os::unsetenv(name.as_slice())
+        for (ref name, _) in env::vars() {
+            env::remove_var(name);
         }
     }
 
-    for ref name in opts.unsets.iter() {
-        std::os::unsetenv(name.as_slice())
+    for name in &opts.unsets {
+        env::remove_var(name);
     }
 
-    for &(ref name, ref val) in opts.sets.iter() {
-        std::os::setenv(name.as_slice(), val.as_slice())
+    for &(ref name, ref val) in &opts.sets {
+        env::set_var(name, val);
     }
 
     if opts.program.len() >= 1 {
-        use std::io::process::{Command, InheritFd};
         let prog = opts.program[0].clone();
-        let args = opts.program.slice_from(1);
-        match Command::new(prog).args(args).stdin(InheritFd(0)).stdout(InheritFd(1)).stderr(InheritFd(2)).status() {
-            Ok(exit) =>
-                return match exit {
-                    std::io::process::ExitStatus(s) => s,
-                    _ => 1
-                },
+        let args = &opts.program[1..];
+        match Command::new(prog).args(args).status() {
+            Ok(exit) => return if exit.success() { 0 } else { exit.code().unwrap() },
             Err(_) => return 1
         }
     } else {
         // no program provided
         print_env(opts.null);
+        pipe_flush!();
     }
 
     0

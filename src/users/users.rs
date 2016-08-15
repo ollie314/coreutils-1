@@ -1,9 +1,10 @@
-#![crate_name = "users"]
+#![crate_name = "uu_users"]
 
 /*
  * This file is part of the uutils coreutils package.
  *
  * (c) KokaKiwi <kokakiwi@kokakiwi.net>
+ * (c) Jian Zeng <anonymousknight86@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -12,77 +13,50 @@
 /* last synced with: whoami (GNU coreutils) 8.22 */
 
 // Allow dead code here in order to keep all fields, constants here, for consistency.
-#![allow(dead_code, non_camel_case_types)]
-
-#![feature(macro_rules, globs)]
+#![allow(dead_code)]
 
 extern crate getopts;
-extern crate libc;
 
-use std::io::print;
-use std::mem;
-use std::ptr;
-use std::string;
-use utmpx::*;
+#[macro_use]
+extern crate uucore;
+use uucore::utmpx::*;
 
-#[path = "../common/util.rs"]
-mod util;
-
-#[path = "../common/utmpx.rs"]
-mod utmpx;
-
-extern {
-    fn getutxent() -> *const c_utmp;
-    fn getutxid(ut: *const c_utmp) -> *const c_utmp;
-    fn getutxline(ut: *const c_utmp) -> *const c_utmp;
-
-    fn pututxline(ut: *const c_utmp) -> *const c_utmp;
-
-    fn setutxent();
-    fn endutxent();
-
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    fn utmpxname(file: *const libc::c_char) -> libc::c_int;
-}
-
-#[cfg(target_os = "freebsd")]
-unsafe extern fn utmpxname(_file: *const libc::c_char) -> libc::c_int {
-    0
-}
+use getopts::Options;
 
 static NAME: &'static str = "users";
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-pub fn uumain(args: Vec<String>) -> int {
-    let program = args[0].as_slice();
-    let opts = [
-        getopts::optflag("h", "help", "display this help and exit"),
-        getopts::optflag("V", "version", "output version information and exit"),
-    ];
+pub fn uumain(args: Vec<String>) -> i32 {
+    let mut opts = Options::new();
 
-    let matches = match getopts::getopts(args.tail(), opts) {
+    opts.optflag("h", "help", "display this help and exit");
+    opts.optflag("V", "version", "output version information and exit");
+
+    let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => panic!("{}", f),
     };
 
     if matches.opt_present("help") {
-        println!("users 1.0.0");
+        println!("{} {}", NAME, VERSION);
         println!("");
         println!("Usage:");
-        println!("  {:s} [OPTION]... [FILE]", program);
+        println!("  {} [OPTION]... [FILE]", NAME);
         println!("");
-        print(getopts::usage("Output who is currently logged in according to FILE.", opts).as_slice());
+        println!("{}", opts.usage("Output who is currently logged in according to FILE."));
         return 0;
     }
 
     if matches.opt_present("version") {
-        println!("users 1.0.0");
+        println!("{} {}", NAME, VERSION);
         return 0;
     }
 
-    let mut filename = DEFAULT_FILE;
-    if matches.free.len() > 0 {
-        filename = matches.free[0].as_slice();
-    }
+    let filename = if !matches.free.is_empty() {
+        matches.free[0].as_ref()
+    } else {
+        DEFAULT_FILE
+    };
 
     exec(filename);
 
@@ -90,35 +64,14 @@ pub fn uumain(args: Vec<String>) -> int {
 }
 
 fn exec(filename: &str) {
-    filename.with_c_str(|filename| {
-        unsafe {
-            utmpxname(filename);
-        }
-    });
+    let mut users = Utmpx::iter_all_records()
+        .read_from(filename)
+        .filter(|ut| ut.is_user_process())
+        .map(|ut| ut.user())
+        .collect::<Vec<_>>();
 
-    let mut users = vec!();
-
-    unsafe {
-        setutxent();
-
-        loop {
-            let line = getutxent();
-
-            if line == ptr::null() {
-                break;
-            }
-
-            if (*line).ut_type == USER_PROCESS {
-                let user = string::raw::from_buf(mem::transmute(&(*line).ut_user));
-                users.push(user);
-            }
-        }
-
-        endutxent();
-    }
-
-    if users.len() > 0 {
+    if !users.is_empty() {
         users.sort();
-        println!("{}", users.connect(" "));
+        println!("{}", users.join(" "));
     }
 }

@@ -1,0 +1,21 @@
+[package]
+name = "nl"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_nl"
+path = "nl.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+aho-corasick = "*"
+memchr = "*"
+regex = "*"
+regex-syntax = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "nl"
+path = "main.rs"

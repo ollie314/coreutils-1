@@ -1,6 +1,10 @@
+target/
+/src/*/gen_table
 /build/
-/target/
+/tmp/
 /busybox/
 *~
 .*.swp
 .*.swo
+Cargo.lock
+lib*.a

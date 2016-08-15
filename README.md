@@ -1,5 +1,9 @@
-uutils coreutils [![Build Status](https://api.travis-ci.org/uutils/coreutils.svg?branch=master)](https://travis-ci.org/uutils/coreutils)
+uutils coreutils
 ================
+
+[![License](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/uutils/coreutils/blob/master/LICENSE)
+[![Build Status](https://api.travis-ci.org/uutils/coreutils.svg?branch=master)](https://travis-ci.org/uutils/coreutils)
+[![Build status](https://ci.appveyor.com/api/projects/status/787ltcxgy86r20le?svg=true)](https://ci.appveyor.com/project/Arcterus/coreutils)
 
 uutils is an attempt at writing universal (as in cross-platform) CLI
 utils in [Rust](http://www.rust-lang.org). This repo is to aggregate the GNU
@@ -28,17 +32,12 @@ make
 
 To build all but a few of the available utilities:
 ```
-make DONT_BUILD='UTILITY_1 UTILITY_2'
+make SKIP_UTILS='UTILITY_1 UTILITY_2'
 ```
 
 To build only a few of the available utilities:
 ```
-make BUILD='UTILITY_1 UTILITY_2'
-```
-
-To build with LTO and stripping:
-```
-make ENABLE_LTO=y ENABLE_STRIP=y
+make UTILS='UTILITY_1 UTILITY_2'
 ```
 
 Installation Instructions
@@ -51,22 +50,27 @@ make install
 
 To install all but a few of the available utilities:
 ```
-make DONT_INSTALL='UTILITY_1 UTILITY_2' install
+make SKIP_UTILS='UTILITY_1 UTILITY_2' install
 ```
 
 To install only a few of the available utilities:
 ```
-make INSTALL='UTILITY_1 UTILITY_2' install
+make UTILS='UTILITY_1 UTILITY_2' install
 ```
 
-To install every program with a prefix:
+To install every program with a prefix (e.g. uu-echo uu-cat):
 ```
 make PROG_PREFIX=PREFIX_GOES_HERE install
 ```
 
 To install the multicall binary:
 ```
-make install-multicall
+make MULTICALL=y install
+```
+
+Set install parent directory (default value is /usr/local):
+```
+make PREFIX=/my/path install
 ```
 
 Uninstallation Instructions
@@ -84,7 +88,12 @@ make PROG_PREFIX=PREFIX_GOES_HERE uninstall
 
 To uninstall the multicall binary:
 ```
-make uninstall-multicall
+make MULTICALL=y uninstall
+```
+
+To uninstall from a custom parent directory:
+```
+make PREFIX=/my/path uninstall
 ```
 
 Test Instructions
@@ -97,76 +106,147 @@ make test
 
 To test all but a few of the available utilities:
 ```
-make DONT_TEST='UTILITY_1 UTILITY_2' test
+make SKIP_UTILS='UTILITY_1 UTILITY_2' test
 ```
 
 To test only a few of the available utilities:
 ```
-make TEST='UTILITY_1 UTILITY_2' test
+make UTILS='UTILITY_1 UTILITY_2' test
+```
+
+To include tests for unimplemented behavior:
+```
+make UTILS='UTILITY_1 UTILITY_2' SPEC=y test
+```
+
+Run busybox tests
+-----------------
+
+This testing functionality is only available on *nix operating systems
+
+To run busybox's tests for all utilities for which busybox has tests
+```
+make busytest
+```
+
+To run busybox's tests for a few of the available utilities
+```
+make UTILS='UTILITY_1 UTILITY_2' busytest
+```
+
+To pass an argument like "-v" to the busybox test runtime
+```
+make UTILS='UTILITY_1 UTILITY_2' RUNTEST_ARGS='-v' busytest
 ```
 
 Contribute
 ----------
 
-Contributions are very welcome, and should target Rust's master branch until
-Rust 1.0 is released. You may *claim* an item on the to-do list by following
-these steps:
-
-1. Open an issue named "Implement [the utility of your choice]", e.g. "Implement ls"
-2. State that you are working on this utility.
-3. Develop the utility.
-4. Add the reference to your utility into uutils/uutils.rs (required for multibinary).
-5. Remove utility from the to-do list on this README.
-6. Submit a pull request and close the issue.
-
-The steps above imply that, before starting to work on a utility, you should search the issues to make sure no one else is working on it.
+To contribute to coreutils, please see [CONTRIBUTING](CONTRIBUTING.md).
 
 To do
 -----
 
-- chcon
-- chgrp
-- chmod
-- chown
-- copy
-- cp (not much done)
-- csplit
-- date
-- dd
-- df
-- dircolors
-- expr
-- getlimits
-- install
-- join
-- libstdbuf
-- ln
-- ls
-- mknod
-- mktemp
-- mv
-- nice
-- numfmt
-- od
-- pathchk
-- pinky
-- pr
-- printf
-- ptx
-- readlink
-- remove
-- runcon
-- setuidgid
-- shred
-- sort
-- split
-- stat
-- stdbuf
-- stty
-- tail (not all features implemented)
-- test (not all features implemented)
-- uniq (in progress)
-- who
+* [x] arch
+* [x] base32
+* [x] base64
+* [x] basename
+* [x] cat
+* [ ] chcon
+* [ ] chgrp
+* [x] chmod
+* [x] chown
+* [x] chroot
+* [x] cksum
+* [x] comm
+* [ ] cp (not much done)
+* [ ] csplit
+* [x] cut
+* [ ] date
+* [ ] dd
+* [ ] df
+* [x] dircolors
+* [x] dirname
+* [x] du
+* [x] echo
+* [x] env
+* [x] expand
+* [ ] expr (almost done, no regular expressions)
+* [x] factor
+* [x] false
+* [x] fmt
+* [x] fold
+* [x] groups
+* [x] hashsum
+* [x] head
+* [x] hostid
+* [x] hostname
+* [x] id
+* [ ] install (a couple of missing options)
+* [ ] join
+* [x] kill
+* [x] link
+* [x] ln
+* [x] logname
+* [ ] ls
+* [x] ~~md5sum~~, ~~sha1sum~~, ~~sha224sum~~, ~~sha256sum~~, ~~sha384sum~~, ~~sha512sum~~ (replaced by [hashsum](https://github.com/uutils/coreutils/blob/master/src/hashsum/hashsum.rs))
+* [x] mkdir
+* [x] mkfifo
+* [x] mknod
+* [x] mktemp
+* [ ] mv (almost done, one more option)
+* [x] nice
+* [x] nl
+* [x] nohup
+* [x] nproc
+* [ ] numfmt
+* [ ] od (in progress, needs lots of work)
+* [x] paste
+* [x] pathchk
+* [x] pinky
+* [ ] pr
+* [x] printenv
+* [ ] printf
+* [x] ptx
+* [x] pwd
+* [x] readlink
+* [x] realpath
+* [x] relpath
+* [x] rm
+* [x] rmdir
+* [ ] runcon
+* [x] seq
+* [x] shred
+* [x] shuf
+* [x] sleep
+* [ ] sort (a couple of options implemented)
+* [ ] split (a couple of missing options)
+* [x] stat
+* [x] stdbuf
+* [ ] stty
+* [x] sum
+* [x] sync
+* [x] tac
+* [ ] tail (not all features implemented)
+* [x] tee
+* [ ] test (not all features implemented)
+* [x] timeout
+* [x] touch
+* [x] tr
+* [x] true
+* [x] truncate
+* [x] tsort
+* [x] tty
+* [x] uname
+* [x] unexpand
+* [x] uniq
+* [x] unlink
+* [x] uptime
+* [x] users
+* [x] wc
+* [x] who
+* [x] whoami
+* [x] yes
 
 License
 -------

@@ -1,0 +1,18 @@
+[package]
+name = "shuf"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_shuf"
+path = "shuf.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+rand = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "shuf"
+path = "main.rs"

@@ -1,0 +1,17 @@
+[package]
+name = "stdbuf"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_stdbuf"
+path = "stdbuf.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "stdbuf"
+path = "main.rs"

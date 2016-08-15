@@ -1,6 +1,4 @@
-#![crate_name = "cp"]
-#![feature(macro_rules)]
-#![feature(phase)]
+#![crate_name = "uu_cp"]
 
 /*
  * This file is part of the uutils coreutils package.
@@ -12,168 +10,174 @@
  */
 
 extern crate getopts;
-#[phase(plugin, link)] extern crate log;
 
-use std::os;
-use std::io;
-use std::io::fs;
+#[macro_use]
+extern crate uucore;
 
-use getopts::{
-    getopts,
-    optflag,
-    usage,
-};
+use getopts::Options;
+use std::fs;
+use std::io::{ErrorKind, Result, Write};
+use std::path::Path;
+use uucore::fs::{canonicalize, CanonicalizeMode};
 
-#[deriving(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Mode {
     Copy,
     Help,
     Version,
 }
 
-pub fn uumain(args: Vec<String>) -> int {
-    let opts = [
-        optflag("h", "help", "display this help and exit"),
-        optflag("", "version", "output version information and exit"),
-    ];
-    let matches = match getopts(args.tail(), opts) {
+static NAME: &'static str = "cp";
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+pub fn uumain(args: Vec<String>) -> i32 {
+    let mut opts = Options::new();
+
+    opts.optflag("h", "help", "display this help and exit");
+    opts.optflag("", "version", "output version information and exit");
+    opts.optopt("t", "target-directory", "copy all SOURCE arguments into DIRECTORY", "DEST");
+    opts.optflag("T", "no-target-directory", "Treat DEST as a regular file and not a directory");
+    opts.optflag("v", "verbose", "explicitly state what is being done");
+
+    let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(e) => {
-            error!("error: {}", e);
+            show_error!("{}", e);
             panic!()
         },
     };
-
-    let progname = &args[0];
-    let usage = usage("Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.", opts);
+    let usage = opts.usage("Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.");
     let mode = if matches.opt_present("version") {
-        Version
+        Mode::Version
     } else if matches.opt_present("help") {
-        Help
+        Mode::Help
     } else {
-        Copy
+        Mode::Copy
     };
 
     match mode {
-        Copy    => copy(matches),
-        Help    => help(progname.as_slice(), usage.as_slice()),
-        Version => version(),
+        Mode::Copy    => copy(matches),
+        Mode::Help    => help(&usage),
+        Mode::Version => version(),
     }
 
     0
 }
 
 fn version() {
-    println!("cp 1.0.0");
+    println!("{} {}", NAME, VERSION);
 }
 
-fn help(progname: &str, usage: &str) {
-    let msg = format!("Usage: {0} SOURCE DEST\n  \
+fn help(usage: &str) {
+    let msg = format!("{0} {1}\n\n\
+                       Usage: {0} SOURCE DEST\n  \
                          or:  {0} SOURCE... DIRECTORY\n  \
-                         or:  {0} -t DIRECTORY SOURCE\n\
+                         or:  {0} -t DIRECTORY SOURCE...\n\
                        \n\
-                       {1}", progname, usage);
+                       {2}", NAME, VERSION, usage);
     println!("{}", msg);
 }
 
 fn copy(matches: getopts::Matches) {
-    let sources : Vec<Path> = if matches.free.len() < 1 {
-        error!("error: Missing SOURCE argument. Try --help.");
+    let verbose = matches.opt_present("verbose");
+    let sources: Vec<String> = if matches.free.is_empty() {
+        show_error!("Missing SOURCE or DEST argument. Try --help.");
         panic!()
+    } else if !matches.opt_present("target-directory") {
+        matches.free[..matches.free.len() - 1].iter().cloned().collect()
     } else {
-        // All but the last argument:
-        matches.free.slice(0, matches.free.len() - 1).iter()
-            .map(|arg| Path::new(arg.clone())).collect()
+        matches.free.iter().cloned().collect()
     };
-    let dest = if matches.free.len() < 2 {
-        error!("error: Missing DEST argument. Try --help.");
+    let dest_str = if matches.opt_present("target-directory") {
+        matches.opt_str("target-directory").expect("Option -t/--target-directory requires an argument")
+    } else {
+        matches.free[matches.free.len() - 1].clone()
+    };
+    let dest = if matches.free.len() < 2 && !matches.opt_present("target-directory") {
+        show_error!("Missing DEST argument. Try --help.");
         panic!()
     } else {
-        // Only the last argument:
-        Path::new(matches.free[matches.free.len() - 1].as_slice())
+        //the argument to the -t/--target-directory= options
+        let path = Path::new(&dest_str);
+        if !path.is_dir() && matches.opt_present("target-directory") {
+            show_error!("Target {} is not a directory", matches.opt_str("target-directory").unwrap());
+            panic!()
+        } else {
+            path
+        }
+
     };
 
     assert!(sources.len() >= 1);
+    if matches.opt_present("no-target-directory") && dest.is_dir() {
+        show_error!("Can't overwrite directory {} with non-directory", dest.display());
+        panic!()
+    }
 
     if sources.len() == 1 {
-        let source = &sources[0];
-        let same_file = match paths_refer_to_same_file(source, &dest) {
-            Ok(b)  => b,
-            Err(e) => if e.kind == io::FileNotFound {
-                false
-            } else {
-                error!("error: {:s}", e.to_string());
-                panic!()
+        let source = Path::new(&sources[0]);
+        let same_file = paths_refer_to_same_file(source, dest).unwrap_or_else(|err| {
+            match err.kind() {
+                ErrorKind::NotFound => false,
+                _ => {
+                    show_error!("{}", err);
+                    panic!()
+                }
             }
-        };
+        });
 
         if same_file {
-            error!("error: \"{:s}\" and \"{:s}\" are the same file",
-                source.display().to_string(),
-                dest.display().to_string());
+            show_error!("\"{}\" and \"{}\" are the same file",
+                source.display(),
+                dest.display());
             panic!();
         }
-
-        let io_result = fs::copy(source, &dest);
-
-        if io_result.is_err() {
-            let err = io_result.unwrap_err();
-            error!("error: {:s}", err.to_string());
+        let mut full_dest = dest.to_path_buf();
+        if dest.is_dir() {
+            full_dest.push(source.file_name().unwrap()); //the destination path is the destination
+        } // directory + the file name we're copying
+        if verbose {
+            println!("{} -> {}", source.display(), full_dest.display());
+        }
+        if let Err(err) = fs::copy(source, full_dest) {
+            show_error!("{}", err);
             panic!();
         }
     } else {
-        if fs::stat(&dest).unwrap().kind != io::TypeDirectory {
-            error!("error: TARGET must be a directory");
+        if !dest.is_dir() {
+            show_error!("TARGET must be a directory");
             panic!();
         }
+        for src in &sources {
+            let source = Path::new(&src);
 
-        for source in sources.iter() {
-            if fs::stat(source).unwrap().kind != io::TypeFile {
-                error!("error: \"{:s}\" is not a file", source.display().to_string());
+            if !source.is_file() {
+                show_error!("\"{}\" is not a file", source.display());
                 continue;
             }
 
-            let mut full_dest = dest.clone();
+            let mut full_dest = dest.to_path_buf();
 
-            full_dest.push(source.filename_str().unwrap());
+            full_dest.push(source.file_name().unwrap());
 
-            println!("{:s}", full_dest.display().to_string());
+            if verbose {
+                println!("{} -> {}", source.display(), full_dest.display());
+            }
 
-            let io_result = fs::copy(source, &full_dest);
+            let io_result = fs::copy(source, full_dest);
 
-            if io_result.is_err() {
-                let err = io_result.unwrap_err();
-                error!("error: {:s}", err.to_string());
+            if let Err(err) = io_result {
+                show_error!("{}", err);
                 panic!()
             }
         }
     }
 }
 
-pub fn paths_refer_to_same_file(p1: &Path, p2: &Path) -> io::IoResult<bool> {
-    let mut raw_p1 = p1.clone();
-    let mut raw_p2 = p2.clone();
-
-    let p1_lstat = match fs::lstat(&raw_p1) {
-        Ok(stat) => stat,
-        Err(e)   => return Err(e),
-    };
-
-    let p2_lstat = match fs::lstat(&raw_p2) {
-        Ok(stat) => stat,
-        Err(e)   => return Err(e),
-    };
-
+pub fn paths_refer_to_same_file(p1: &Path, p2: &Path) -> Result<bool> {
     // We have to take symlinks and relative paths into account.
-    if p1_lstat.kind == io::TypeSymlink {
-        raw_p1 = fs::readlink(&raw_p1).unwrap();
-    }
-    raw_p1 = os::make_absolute(&raw_p1);
+    let pathbuf1 = try!(canonicalize(p1, CanonicalizeMode::Normal));
+    let pathbuf2 = try!(canonicalize(p2, CanonicalizeMode::Normal));
 
-    if p2_lstat.kind == io::TypeSymlink {
-        raw_p2 = fs::readlink(&raw_p2).unwrap();
-    }
-    raw_p2 = os::make_absolute(&raw_p2);
-
-    Ok(raw_p1 == raw_p2)
+    Ok(pathbuf1 == pathbuf2)
 }

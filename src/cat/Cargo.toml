@@ -1,0 +1,17 @@
+[package]
+name = "cat"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_cat"
+path = "cat.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "cat"
+path = "main.rs"

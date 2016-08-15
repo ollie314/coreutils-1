@@ -1,0 +1,29 @@
+[package]
+name = "uucore"
+version = "0.0.1"
+authors = []
+
+[dependencies]
+getopts = "*"
+time = { version = "*", optional = true }
+data-encoding = { version = "^1.1", optional = true }
+
+[dependencies.libc]
+git = "https://github.com/rust-lang/libc.git"
+optional = true
+
+[features]
+fs = ["libc"]
+utf8 = []
+encoding = ["data-encoding"]
+parse_time = []
+utmpx = ["time", "libc"]
+c_types = ["libc"]
+process = ["libc"]
+signals = []
+wide = []
+default = ["fs", "libc", "utf8", "encoding", "parse_time", "utmpx", "c_types", "process", "signals", "wide"]
+
+[lib]
+path = "lib.rs"
+name = "uucore"

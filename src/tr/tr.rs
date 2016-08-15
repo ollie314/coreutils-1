@@ -1,160 +1,119 @@
-#![crate_name = "tr"]
-#![feature(macro_rules)]
+#![crate_name = "uu_tr"]
 
 /*
  * This file is part of the uutils coreutils package.
  *
  * (c) Michael Gehring <mg@ebfe.org>
+ * (c) kwantam <kwantam@gmail.com>
+ *     20150428 created `expand` module to eliminate most allocs during setup
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
-extern crate collections;
+extern crate bit_set;
 extern crate getopts;
+extern crate vec_map;
 
-use collections::bitv_set::BitvSet;
-use collections::vec_map::VecMap;
-use getopts::OptGroup;
-use std::char::from_u32;
-use std::io::print;
-use std::io::stdio::{stdin,stdout};
-use std::iter::FromIterator;
-use std::vec::Vec;
+#[macro_use]
+extern crate uucore;
 
-#[path="../common/util.rs"]
-mod util;
+use bit_set::BitSet;
+use getopts::Options;
+use std::io::{stdin, stdout, BufReader, BufWriter, Read, Write};
+use vec_map::VecMap;
 
-static NAME : &'static str = "tr";
-static VERSION : &'static str = "1.0.0";
+use expand::ExpandSet;
 
-fn unescape_char(c: char) -> char {
-    match c {
-        'a' => 0x07u8 as char,
-        'b' => 0x08u8 as char,
-        'f' => 0x0cu8 as char,
-        'v' => 0x0bu8 as char,
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        _ => c,
+mod expand;
+
+static NAME: &'static str = "tr";
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const BUFFER_LEN: usize = 1024;
+
+fn delete(set: ExpandSet, complement: bool) {
+    let mut bset = BitSet::new();
+    let mut stdout = stdout();
+    let mut buf = String::with_capacity(BUFFER_LEN + 4);
+
+    for c in set {
+        bset.insert(c as usize);
     }
-}
 
-fn unescape(v: Vec<char>) -> Vec<char> {
-    let mut out = Vec::new();
-    let mut input = v.as_slice();
-    loop {
-        input = match input {
-            ['\\', e, rest..] => {
-                out.push(unescape_char(e));
-                rest
-            }
-            [c, rest..] => {
-                out.push(c);
-                rest
-            }
-            [] => break
+    let is_allowed = |c : char| {
+        if complement {
+            bset.contains(c as usize)
+        } else {
+            !bset.contains(c as usize)
         }
-    }
-    out
-}
-
-fn expand_range(from: char, to: char) -> Vec<char> {
-    range(from as u32, to as u32 + 1).map(|c| from_u32(c).unwrap()).collect()
-}
-
-fn expand_set(s: &str) -> Vec<char> {
-    let mut set = Vec::<char>::new();
-    let unesc = unescape(FromIterator::from_iter(s.chars()));
-    let mut input = unesc.as_slice();
-
-    loop {
-        input = match input {
-            [f, '-', t, rest..] => {
-                set.push_all(expand_range(f, t).as_slice());
-                rest
-            }
-            [c, rest..] => {
-                set.push(c);
-                rest
-            }
-            [] => break
-        };
-    }
-    set
-}
-
-fn delete(set: Vec<char>, complement: bool) {
-    let mut bset = BitvSet::new();
-    let mut out = stdout();
-
-    for &c in set.iter() {
-        bset.insert(c as uint);
-    }
-
-    let is_allowed = if complement {
-        |c: char| bset.contains(&(c as uint))
-    } else {
-        |c: char| !bset.contains(&(c as uint))
     };
 
-    for c in stdin().chars() {
-        match c {
-            Ok(c) if is_allowed(c) => out.write_char(c).unwrap(),
-            Ok(_) => (),
-            Err(err) => panic!("{}", err),
-        };
+    let mut reader = BufReader::new(stdin());
+
+    while let Ok(length) = reader.read_to_string(&mut buf) {
+        if length == 0 { break }
+
+        let filtered = buf.chars()
+                          .filter(|c| { is_allowed(*c) })
+                          .collect::<String>();
+        safe_unwrap!(stdout.write_all(filtered.as_bytes()));
+        buf.clear();
     }
 }
 
-fn tr(set1: &[char], set2: &[char]) {
-    let mut map = VecMap::<char>::new();
-    let mut out = stdout();
+fn tr<'a>(set1: ExpandSet<'a>, mut set2: ExpandSet<'a>) {
+    let mut map = VecMap::new();
+    let stdout = stdout();
+    let mut buf = String::with_capacity(BUFFER_LEN + 4);
 
-    for i in range(0, set1.len()) {
-        if i >= set2.len() {
-            map.insert(set1[i] as uint, set2[set2.len()-1]);
-        } else {
-            map.insert(set1[i] as uint, set2[i]);
-        }
+    let mut s2_prev = '_';
+    for i in set1 {
+        s2_prev = set2.next().unwrap_or(s2_prev);
+
+        map.insert(i as usize, s2_prev);
     }
 
-    for c in stdin().chars() {
-        match c {
-            Ok(inc) => {
-                let trc = match map.get(&(inc as uint)) {
+    let mut reader = BufReader::new(stdin());
+    let mut writer = BufWriter::new(stdout);
+
+    while let Ok(length) = reader.read_to_string(&mut buf) {
+        if length == 0 { break }
+
+        {
+            let mut chars = buf.chars();
+
+            while let Some(char) = chars.next() {
+                let trc = match map.get(char as usize) {
                     Some(t) => *t,
-                    None => inc,
+                    None => char,
                 };
-                out.write_char(trc).unwrap();
-            }
-            Err(err) => {
-                panic!("{}", err);
+                safe_unwrap!(writer.write_all(format!("{}", trc).as_ref()));
             }
         }
+
+        buf.clear();
     }
 }
 
-fn usage(opts: &[OptGroup]) {
-        println!("{} {}", NAME, VERSION);
-        println!("");
-        println!("Usage:");
-        println!("  {} [OPTIONS] SET1 [SET2]", NAME);
-        println!("");
-        print(getopts::usage("Translate or delete characters.", opts).as_slice());
+fn usage(opts: &Options) {
+    println!("{} {}", NAME, VERSION);
+    println!("");
+    println!("Usage:");
+    println!("  {} [OPTIONS] SET1 [SET2]", NAME);
+    println!("");
+    println!("{}", opts.usage("Translate or delete characters."));
 }
 
-pub fn uumain(args: Vec<String>) -> int {
-    let opts = [
-        getopts::optflag("c", "complement", "use the complement of SET1"),
-        getopts::optflag("C", "", "same as -c"),
-        getopts::optflag("d", "delete", "delete characters in SET1"),
-        getopts::optflag("h", "help", "display this help and exit"),
-        getopts::optflag("V", "version", "output version information and exit"),
-    ];
+pub fn uumain(args: Vec<String>) -> i32 {
+    let mut opts = Options::new();
 
-    let matches = match getopts::getopts(args.tail(), opts) {
+    opts.optflag("c", "complement", "use the complement of SET1");
+    opts.optflag("C", "", "same as -c");
+    opts.optflag("d", "delete", "delete characters in SET1");
+    opts.optflag("h", "help", "display this help and exit");
+    opts.optflag("V", "version", "output version information and exit");
+
+    let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(err) => {
             show_error!("{}", err);
@@ -163,7 +122,7 @@ pub fn uumain(args: Vec<String>) -> int {
     };
 
     if matches.opt_present("help") {
-        usage(opts);
+        usage(&opts);
         return 0;
     }
 
@@ -172,13 +131,13 @@ pub fn uumain(args: Vec<String>) -> int {
         return 0;
     }
 
-    if matches.free.len() == 0 {
-        usage(opts);
+    if matches.free.is_empty() {
+        usage(&opts);
         return 1;
     }
 
     let dflag = matches.opt_present("d");
-    let cflag = matches.opts_present(["c".to_string(), "C".to_string()]);
+    let cflag = matches.opts_present(&["c".to_owned(), "C".to_owned()]);
     let sets = matches.free;
 
     if cflag && !dflag {
@@ -187,12 +146,12 @@ pub fn uumain(args: Vec<String>) -> int {
     }
 
     if dflag {
-        let set1 = expand_set(sets[0].as_slice());
+        let set1 = ExpandSet::new(sets[0].as_ref());
         delete(set1, cflag);
     } else {
-        let set1 = expand_set(sets[0].as_slice());
-        let set2 = expand_set(sets[1].as_slice());
-        tr(set1.as_slice(), set2.as_slice());
+        let set1 = ExpandSet::new(sets[0].as_ref());
+        let set2 = ExpandSet::new(sets[1].as_ref());
+        tr(set1, set2);
     }
 
     0

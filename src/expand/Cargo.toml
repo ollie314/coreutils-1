@@ -1,0 +1,18 @@
+[package]
+name = "expand"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_expand"
+path = "expand.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+unicode-width = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "expand"
+path = "main.rs"

@@ -1,0 +1,17 @@
+[package]
+name = "id"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_id"
+path = "id.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "id"
+path = "main.rs"

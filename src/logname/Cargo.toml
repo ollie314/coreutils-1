@@ -1,0 +1,17 @@
+[package]
+name = "logname"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_logname"
+path = "logname.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "logname"
+path = "main.rs"

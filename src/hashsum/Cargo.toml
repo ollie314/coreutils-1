@@ -1,0 +1,20 @@
+[package]
+name = "hashsum"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_hashsum"
+path = "hashsum.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+regex = "*"
+regex-syntax = "*"
+rust-crypto = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "hashsum"
+path = "main.rs"

@@ -1,0 +1,17 @@
+[package]
+name = "sum"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_sum"
+path = "sum.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "sum"
+path = "main.rs"

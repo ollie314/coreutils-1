@@ -1,0 +1,17 @@
+[package]
+name = "truncate"
+version = "0.0.1"
+authors = []
+
+[lib]
+name = "uu_truncate"
+path = "truncate.rs"
+
+[dependencies]
+getopts = "*"
+libc = "*"
+uucore = { path="../uucore" }
+
+[[bin]]
+name = "truncate"
+path = "main.rs"

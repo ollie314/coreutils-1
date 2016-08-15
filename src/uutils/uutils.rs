@@ -9,23 +9,18 @@
  * file that was distributed with this source code.
  */
 
-extern crate getopts;
+include!(concat!(env!("OUT_DIR"), "/uutils_crates.rs"));
 
-@CRATES@
-
-use std::os;
 use std::collections::hash_map::HashMap;
+use std::path::Path;
+use std::env;
 
 static NAME: &'static str = "uutils";
-static VERSION: &'static str = "1.0.0";
+static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-fn util_map() -> HashMap<&'static str, fn(Vec<String>) -> int> {
-    let mut map = HashMap::new();
-    @UTIL_MAP@
-    map
-}
+include!(concat!(env!("OUT_DIR"), "/uutils_map.rs"));
 
-fn usage(cmap: &HashMap<&'static str, fn(Vec<String>) -> int>) {
+fn usage(cmap: &UtilityMap) {
     println!("{} {}", NAME, VERSION);
     println!("");
     println!("Usage:");
@@ -33,79 +28,77 @@ fn usage(cmap: &HashMap<&'static str, fn(Vec<String>) -> int>) {
     println!("Currently defined functions:");
     let mut utils: Vec<&str> = cmap.keys().map(|&s| s).collect();
     utils.sort();
-    for util in utils.iter() {
+    for util in utils {
         println!("\t{}", util);
     }
 }
 
 fn main() {
     let umap = util_map();
-    let mut args = os::args();
+    let mut args : Vec<String> = env::args().collect();
 
     // try binary name as util name.
-    let binary = Path::new(args[0].as_slice());
-    let binary_as_util = binary.filename_str().unwrap();
+    let args0 = args[0].clone();
+    let binary = Path::new(&args0[..]);
+    let binary_as_util = binary.file_name().unwrap().to_str().unwrap();
 
-    match umap.find_equiv(binary_as_util) {
-        Some(&uumain) => {
-            os::set_exit_status(uumain(args));
-            return
-        }
-        None => (),
+    if let Some(&uumain) = umap.get(binary_as_util) {
+        std::process::exit(uumain(args));
     }
 
     if binary_as_util.ends_with("uutils") || binary_as_util.starts_with("uutils") ||
-        binary_as_util.ends_with("busybox") || binary_as_util.starts_with("busybox") {
-            // uutils can be called as either "uutils", "busybox"
-            // "uutils-suffix" or "busybox-suffix". Not sure
-            // what busybox uses the -suffix pattern for.
+     binary_as_util.ends_with("busybox") || binary_as_util.starts_with("busybox") {
+        args.remove(0);
     } else {
-        println!("{}: applet not found", binary_as_util);
-        os::set_exit_status(1);
-        return
+        let mut found = false;
+        for util in umap.keys() {
+            if binary_as_util.ends_with(util) {
+                args[0] = (*util).to_owned();
+                found = true;
+                break;
+            }
+        }
+        if ! found {
+            println!("{}: applet not found", binary_as_util);
+            std::process::exit(1);
+        }
     }
 
     // try first arg as util name.
-    if args.len() >= 2 {
-        args.remove(0);
-        let util = args[0].as_slice();
+    if args.len() >= 1 {
 
-        match umap.find_equiv(util) {
+        let util = &args[0][..];
+
+        match umap.get(util) {
             Some(&uumain) => {
-                os::set_exit_status(uumain(args.clone()));
-                return
+                std::process::exit(uumain(args.clone()));
             }
             None => {
-                if args[0].as_slice() == "--help" {
+                if &args[0][..] == "--help" {
                     // see if they want help on a specific util
                     if args.len() >= 2 {
-                        let util = args[1].as_slice();
-                        match umap.find_equiv(util) {
+                        let util = &args[1][..];
+                        match umap.get(util) {
                             Some(&uumain) => {
-                                os::set_exit_status(uumain(vec![util.to_string(), "--help".to_string()]));
-                                return
+                                std::process::exit(uumain(vec![util.to_owned(), "--help".to_owned()]));
                             }
                             None => {
                                 println!("{}: applet not found", util);
-                                os::set_exit_status(1);
-                                return
+                                std::process::exit(1);
                             }
                         }
                     }
                     usage(&umap);
-                    os::set_exit_status(0);
-                    return
+                    std::process::exit(0);
                 } else {
                     println!("{}: applet not found", util);
-                    os::set_exit_status(1);
-                    return
+                    std::process::exit(1);
                 }
             }
         }
     } else {
         // no arguments provided
         usage(&umap);
-        os::set_exit_status(0);
-        return
+        std::process::exit(0);
     }
 }
