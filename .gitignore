@@ -3,8 +3,10 @@ target/
 /build/
 /tmp/
 /busybox/
+/.vscode/
 *~
 .*.swp
 .*.swo
+.idea
 Cargo.lock
 lib*.a

@@ -66,6 +66,7 @@ PROGS       := \
   ls \
   mkdir \
   mktemp \
+  more \
   nl \
   nproc \
   od \
@@ -103,6 +104,7 @@ PROGS       := \
 
 UNIX_PROGS := \
   arch \
+  chgrp \
   chmod \
   chown \
   chroot \
@@ -144,6 +146,7 @@ TEST_PROGS  := \
 	base64 \
 	basename \
 	cat \
+	chgrp \
 	chmod \
 	chown \
 	cksum \

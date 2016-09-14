@@ -181,6 +181,7 @@ pub fn get_root_path() -> &'static str {
 
 /// Object-oriented path struct that represents and operates on
 /// paths relative to the directory it was constructed for.
+#[derive(Clone)]
 pub struct AtPath {
     pub subdir: PathBuf,
 }
@@ -287,6 +288,13 @@ impl AtPath {
                 self.minus_as_string(p.to_str().unwrap())
             }
             Err(_) => "".to_string(),
+        }
+    }
+
+    pub fn symlink_metadata(&self, path: &str) -> fs::Metadata {
+        match fs::symlink_metadata(&self.plus(path)) {
+            Ok(m) => m,
+            Err(e) => panic!("{}", e),
         }
     }
 

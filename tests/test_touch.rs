@@ -1,18 +1,18 @@
-extern crate filetime;
+extern crate uu_touch;
+use self::uu_touch::filetime::{self, FileTime};
+
 extern crate time;
 
 use common::util::*;
-use self::filetime::FileTime;
-
-static UTIL_NAME: &'static str = "touch";
-fn at_and_ucmd() -> (AtPath, UCommand) {
-    let ts = TestScenario::new(UTIL_NAME);
-    let ucmd = ts.ucmd();
-    (ts.fixtures, ucmd)
-}
 
 fn get_file_times(at: &AtPath, path: &str) -> (FileTime, FileTime) {
     let m = at.metadata(path);
+    (FileTime::from_last_access_time(&m),
+     FileTime::from_last_modification_time(&m))
+}
+
+fn get_symlink_times(at: &AtPath, path: &str) -> (FileTime, FileTime) {
+    let m = at.symlink_metadata(path);
     (FileTime::from_last_access_time(&m),
      FileTime::from_last_modification_time(&m))
 }
@@ -31,18 +31,18 @@ fn str_to_filetime(format: &str, s: &str) -> FileTime {
 
 #[test]
 fn test_touch_default() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_default_file";
 
     ucmd.arg(file).succeeds().no_stderr();
-    
+
 
     assert!(at.file_exists(file));
 }
 
 #[test]
 fn test_touch_no_create_file_absent() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_no_create_file_absent";
 
     ucmd.arg("-c").arg(file).succeeds().no_stderr();
@@ -52,7 +52,7 @@ fn test_touch_no_create_file_absent() {
 
 #[test]
 fn test_touch_no_create_file_exists() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_no_create_file_exists";
 
     at.touch(file);
@@ -65,7 +65,7 @@ fn test_touch_no_create_file_exists() {
 
 #[test]
 fn test_touch_set_mdhm_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_mdhm_time";
 
     ucmd.args(&["-t", "01011234", file]).succeeds().no_stderr();
@@ -83,7 +83,7 @@ fn test_touch_set_mdhm_time() {
 
 #[test]
 fn test_touch_set_mdhms_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_mdhms_time";
 
     ucmd.args(&["-t", "01011234.56", file]).succeeds().no_stderr();
@@ -101,7 +101,7 @@ fn test_touch_set_mdhms_time() {
 
 #[test]
 fn test_touch_set_ymdhm_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_ymdhm_time";
 
     ucmd.args(&["-t", "1501011234", file]).succeeds().no_stderr();
@@ -119,7 +119,7 @@ fn test_touch_set_ymdhm_time() {
 
 #[test]
 fn test_touch_set_ymdhms_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_ymdhms_time";
 
     ucmd.args(&["-t", "1501011234.56", file]).succeeds().no_stderr();
@@ -137,7 +137,7 @@ fn test_touch_set_ymdhms_time() {
 
 #[test]
 fn test_touch_set_cymdhm_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_cymdhm_time";
 
     ucmd.args(&["-t", "201501011234", file]).succeeds().no_stderr();
@@ -155,7 +155,7 @@ fn test_touch_set_cymdhm_time() {
 
 #[test]
 fn test_touch_set_cymdhms_time() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_cymdhms_time";
 
     ucmd.args(&["-t", "201501011234.56", file]).succeeds().no_stderr();
@@ -173,7 +173,7 @@ fn test_touch_set_cymdhms_time() {
 
 #[test]
 fn test_touch_set_only_atime() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_only_atime";
 
     ucmd.args(&["-t", "201501011234", "-a", file]).succeeds().no_stderr();
@@ -189,7 +189,7 @@ fn test_touch_set_only_atime() {
 
 #[test]
 fn test_touch_set_only_mtime() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_only_mtime";
 
     ucmd.args(&["-t", "201501011234", "-m", file]).succeeds().no_stderr();
@@ -205,7 +205,7 @@ fn test_touch_set_only_mtime() {
 
 #[test]
 fn test_touch_set_both() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_both";
 
     ucmd.args(&["-t", "201501011234", "-a", "-m", file]).succeeds().no_stderr();
@@ -222,8 +222,35 @@ fn test_touch_set_both() {
 }
 
 #[test]
+fn test_touch_no_dereference() {
+    let (at, mut ucmd) = at_and_ucmd!();
+    let file_a = "test_touch_no_dereference_a";
+    let file_b = "test_touch_no_dereference_b";
+    let start_of_year = str_to_filetime("%Y%m%d%H%M", "201501010000");
+    let end_of_year = str_to_filetime("%Y%m%d%H%M", "201512312359");
+
+    at.touch(file_a);
+    set_file_times(&at, file_a, start_of_year, start_of_year);
+    at.symlink(file_a, file_b);
+    assert!(at.file_exists(file_a));
+    assert!(at.is_symlink(file_b));
+
+    ucmd.args(&["-t", "201512312359", "-h", file_b]).succeeds().no_stderr();
+
+    let (atime, mtime) = get_symlink_times(&at, file_b);
+    assert_eq!(atime, mtime);
+    assert_eq!(atime, end_of_year);
+    assert_eq!(mtime, end_of_year);
+
+    let (atime, mtime) = get_file_times(&at, file_a);
+    assert_eq!(atime, mtime);
+    assert_eq!(atime, start_of_year);
+    assert_eq!(mtime, start_of_year);
+}
+
+#[test]
 fn test_touch_reference() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file_a = "test_touch_reference_a";
     let file_b = "test_touch_reference_b";
     let start_of_year = str_to_filetime("%Y%m%d%H%M", "201501010000");
@@ -244,7 +271,7 @@ fn test_touch_reference() {
 
 #[test]
 fn test_touch_set_date() {
-    let (at, mut ucmd) = at_and_ucmd();
+    let (at, mut ucmd) = at_and_ucmd!();
     let file = "test_touch_set_date";
 
     ucmd.args(&["-d", "Thu Jan 01 12:34:00 2015", file]).succeeds().no_stderr();

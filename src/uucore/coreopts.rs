@@ -26,12 +26,16 @@ impl<'a> CoreOptions<'a> {
             .optflag("", "version", "print name and version number");
         ret
     }
-    pub fn optopt(&mut self, short_name: &str, long_name: &str, desc: &str, hint: &str) -> &mut CoreOptions<'a> {
-        self.options.optopt(short_name, long_name, desc, hint);
+    pub fn optflagopt(&mut self, short_name: &str, long_name: &str, desc: &str, hint: &str) -> &mut CoreOptions<'a> {
+        self.options.optflagopt(short_name, long_name, desc, hint);
         self
     }
     pub fn optflag(&mut self, short_name: &str, long_name: &str, desc: &str) -> &mut CoreOptions<'a> {
         self.options.optflag(short_name, long_name, desc);
+        self
+    }
+    pub fn optopt(&mut self, short_name: &str, long_name: &str, desc: &str, hint: &str) -> &mut CoreOptions<'a> {
+        self.options.optopt(short_name, long_name, desc, hint);
         self
     }
     pub fn usage(&self, summary : &str) -> String {
@@ -41,14 +45,16 @@ impl<'a> CoreOptions<'a> {
         let matches = match self.options.parse(&args[1..]) {
             Ok(m) => { Some(m) },
             Err(f) => {
-                crash!(1, "{}", f);
+                pipe_write!(&mut ::std::io::stderr(), "{}: error: ", self.help_text.name);
+                pipe_writeln!(&mut ::std::io::stderr(), "{}", f);
+                ::std::process::exit(1);
             }
         }.unwrap();
-        if matches.opt_present("help") {            
+        if matches.opt_present("help") {
             let usage_str = if self.help_text.display_usage {
-                    format!("\n {}\n\n Reference\n", 
+                    format!("\n {}\n\n Reference\n",
                         self.options.usage(self.help_text.summary)
-                    ).replace("Options:", " Options:") 
+                    ).replace("Options:", " Options:")
                 } else { String::new() };
             print!("
  {0} {1}
@@ -66,7 +72,7 @@ impl<'a> CoreOptions<'a> {
 }
 
 #[macro_export]
-macro_rules! new_coreopts { 
+macro_rules! new_coreopts {
     ($syntax: expr, $summary: expr, $long_help: expr) => (
         uucore::coreopts::CoreOptions::new(uucore::coreopts::HelpText {
             name: executable!(),

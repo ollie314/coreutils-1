@@ -4,66 +4,42 @@
  * This file is part of the uutils coreutils package.
  *
  * (c) Vsevolod Velichko <torkvemada@sorokdva.net>
+ * (c) Jian Zeng <anonymousknight96 AT gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
 extern crate getopts;
-extern crate libc;
 
 #[macro_use]
 extern crate uucore;
+use uucore::libc::{self, setgid, setuid, chroot, setgroups};
+use uucore::entries;
 
-use getopts::Options;
-use libc::{setgid, setuid};
 use std::ffi::CString;
 use std::io::{Error, Write};
 use std::iter::FromIterator;
 use std::path::Path;
 use std::process::Command;
-use uucore::c_types::{get_pw_from_args, get_group};
-
-extern {
-    fn chroot(path: *const libc::c_char) -> libc::c_int;
-}
-
-#[cfg(any(target_os = "macos", target_os = "freebsd"))]
-extern {
-    fn setgroups(size: libc::c_int, list: *const libc::gid_t) -> libc::c_int;
-}
-
-#[cfg(target_os = "linux")]
-extern {
-    fn setgroups(size: libc::size_t, list: *const libc::gid_t) -> libc::c_int;
-}
 
 static NAME: &'static str = "chroot";
-static VERSION: &'static str = env!("CARGO_PKG_VERSION");
+static SYNTAX: &'static str = "[OPTION]... NEWROOT [COMMAND [ARG]...]"; 
+static SUMMARY: &'static str = "Run COMMAND with root directory set to NEWROOT."; 
+static LONG_HELP: &'static str = "
+ If COMMAND is not specified, it defaults to '$(SHELL) -i'.
+ If $(SHELL) is not set, /bin/sh is used.
+"; 
 
 pub fn uumain(args: Vec<String>) -> i32 {
-    let mut opts = Options::new();
-
-    opts.optopt("u", "user", "User (ID or name) to switch before running the program", "USER");
-    opts.optopt("g", "group", "Group (ID or name) to switch to", "GROUP");
-    opts.optopt("G", "groups", "Comma-separated list of groups to switch to", "GROUP1,GROUP2...");
-    opts.optopt("", "userspec", "Colon-separated user and group to switch to. \
+    let matches = new_coreopts!(SYNTAX, SUMMARY, LONG_HELP)
+        .optopt("u", "user", "User (ID or name) to switch before running the program", "USER")
+        .optopt("g", "group", "Group (ID or name) to switch to", "GROUP")
+        .optopt("G", "groups", "Comma-separated list of groups to switch to", "GROUP1,GROUP2...")
+        .optopt("", "userspec", "Colon-separated user and group to switch to. \
         Same as -u USER -g GROUP. \
-        Userspec has higher preference than -u and/or -g", "USER:GROUP");
-    opts.optflag("h", "help", "Show help");
-    opts.optflag("V", "version", "Show program's version");
-
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => {
-            show_error!("{}", f);
-            help_menu(opts);
-            return 1
-        }
-    };
-
-    if matches.opt_present("V") { version(); return 0 }
-    if matches.opt_present("h") { help_menu(opts); return 0 }
+        Userspec has higher preference than -u and/or -g", "USER:GROUP")
+        .parse(args);
 
     if matches.free.is_empty() {
         println!("Missing operand: NEWROOT");
@@ -146,9 +122,9 @@ fn enter_chroot(root: &Path) {
 
 fn set_main_group(group: &str) {
     if !group.is_empty() {
-        let group_id = match get_group(group) {
-            None => crash!(1, "no such group: {}", group),
-            Some(g) => g.gr_gid
+        let group_id = match entries::grp2gid(group) {
+            Ok(g) => g,
+            _ => crash!(1, "no such group: {}", group),
         };
         let err = unsafe { setgid(group_id) };
         if err != 0 {
@@ -177,9 +153,9 @@ fn set_groups_from_str(groups: &str) {
     if !groups.is_empty() {
         let groups_vec: Vec<libc::gid_t> = FromIterator::from_iter(
             groups.split(',').map(
-                |x| match get_group(x) {
-                    None => crash!(1, "no such group: {}", x),
-                    Some(g) => g.gr_gid
+                |x| match entries::grp2gid(x) {
+                    Ok(g) => g,
+                    _ => crash!(1, "no such group: {}", x),
                 })
             );
         let err = set_groups(groups_vec);
@@ -191,27 +167,10 @@ fn set_groups_from_str(groups: &str) {
 
 fn set_user(user: &str) {
     if !user.is_empty() {
-        let user_id = get_pw_from_args(&vec!(user.to_owned())).unwrap().pw_uid;
+        let user_id = entries::usr2uid(user).unwrap();
         let err = unsafe { setuid(user_id as libc::uid_t) };
         if err != 0 {
             crash!(1, "cannot set user to {}: {}", user, Error::last_os_error())
         }
     }
-}
-
-fn version() {
-    println!("{} {}", NAME, VERSION)
-}
-
-fn help_menu(options: Options) {
-    let msg = format!("{0} {1}
-
-Usage:
-  {0} [OPTION]... NEWROOT [COMMAND [ARG]...]
-
-Run COMMAND with root directory set to NEWROOT.
-If COMMAND is not specified, it defaults to '$(SHELL) -i'.
-If $(SHELL) is not set, /bin/sh is used.", NAME, VERSION);
-
-    print!("{}", options.usage(&msg));
 }

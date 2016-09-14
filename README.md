@@ -153,7 +153,7 @@ To do
 * [x] basename
 * [x] cat
 * [ ] chcon
-* [ ] chgrp
+* [x] chgrp
 * [x] chmod
 * [x] chown
 * [x] chroot
@@ -194,7 +194,8 @@ To do
 * [x] mkfifo
 * [x] mknod
 * [x] mktemp
-* [ ] mv (almost done, one more option)
+* [x] mv
+* [ ] more (in progress, needs lots of work)
 * [x] nice
 * [x] nl
 * [x] nohup
